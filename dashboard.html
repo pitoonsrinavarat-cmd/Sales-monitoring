@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sales Monitoring</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; transition: 0.3s; z-index: 1000; }
+        .sidebar h2 { text-align: center; padding: 20px 0; margin: 0; background-color: #1a252f; font-size: 20px; }
+        .sidebar a { padding: 15px 20px; text-decoration: none; color: #ecf0f1; border-bottom: 1px solid #34495e; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background-color: #3498db; }
+        .sidebar .logout { margin-top: auto; background-color: #c0392b; text-align: center; font-weight: bold; border-top: none; }
+        
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .welcome-msg { font-size: 14px; background: #e8f4f8; padding: 8px 15px; border-radius: 20px; }
+        
+        .filter-container { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); align-items: center; }
+        .filter-container input, .filter-container select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; flex: 1; min-width: 150px;}
+
+        /* Summary Cards - 2 Rows */
+        .summary-row { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; }
+        .sum-card { flex: 1; min-width: 200px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; border-top: 4px solid #ccc; position: relative;}
+        .sum-card h4 { margin: 0 0 5px 0; font-size: 13px; color: #7f8c8d; text-transform: uppercase;}
+        .sum-card .num { font-size: 28px; font-weight: bold; color: #2c3e50; }
+        
+        /* สียอดขายแถวบน */
+        .c-sales { border-top-color: #27ae60; } .c-sales .num { color: #27ae60; }
+        .c-ret { border-top-color: #8e44ad; } .c-ret .num { color: #8e44ad; }
+        .c-proj { border-top-color: #16a085; } .c-proj .num { color: #16a085; }
+        
+        /* สีสถานะแถวล่าง */
+        .c-ongoing { border-top-color: #3498db; } .c-ongoing .num { color: #3498db; }
+        .c-win { border-top-color: #f39c12; } .c-win .num { color: #f39c12; }
+        .c-lose { border-top-color: #e74c3c; } .c-lose .num { color: #e74c3c; }
+
+        /* กล่องรายละเอียด Sub-status */
+        .sub-details { font-size:12px; text-align:left; margin-top:10px; padding:8px; border-radius:4px; display:flex; flex-direction:column; gap:4px; }
+        .bg-ongoing { background:#ebf5fb; color:#21618c; border-left: 3px solid #3498db;}
+        .bg-win { background:#fef5e7; color:#935116; border-left: 3px solid #f39c12;}
+
+        .grid-container { display: flex; gap: 20px; flex-wrap: wrap; }
+        .chart-box { flex: 2; min-width: 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .list-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-height: 400px; overflow-y: auto;}
+        
+        .list-box h3 { margin-top: 0; color: #2c3e50; font-size: 16px; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .new-proj-item { padding: 10px 0; border-bottom: 1px dashed #eee; font-size: 13px;}
+        .new-proj-item strong { display: block; color: #2980b9; font-size: 14px;}
+        .new-proj-item span { color: #7f8c8d; }
+
+        .menu-toggle { display: none; background: #2c3e50; color: white; border: none; padding: 8px 12px; font-size: 18px; border-radius: 4px; cursor: pointer; }
+
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: -250px; height: 100%; }
+            .sidebar.show { left: 0; }
+            .menu-toggle { display: inline-block; }
+            .header h1 { font-size: 18px; margin: 0; }
+            .chart-box, .list-box { flex: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <h2>📊 Sales Monitoring</h2>
+        <a href="dashboard.html" class="active">หน้าหลัก (Dashboard)</a>
+        <a href="retailer.html">🏪 ฐานข้อมูลร้านค้า</a>
+        <a href="project.html">🏗️ Project Pipeline</a>
+        <a href="forecast.html">📈 Forecast Sales</a>
+        <a href="actual.html">💰 Actual Sales</a>
+        <a href="account.html" id="menuAccount">⚙️ จัดการบัญชีผู้ใช้</a>
+        <a href="#" class="logout" id="logoutBtn">🚪 ออกจากระบบ</a>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+                <h1 style="margin:0;">Dashboard</h1>
+            </div>
+            <div class="welcome-msg">👤 <span id="userNameDisplay">...</span> (<span id="userRoleDisplay">...</span>)</div>
+        </div>
+
+        <div class="filter-container">
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:12px;">ตั้งแต่เดือน (เริ่ม):</label>
+                <input type="month" id="filterStartMonth" onchange="loadDashboard()" style="width:100%;">
+            </div>
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:12px;">ถึงเดือน (จบ):</label>
+                <input type="month" id="filterEndMonth" onchange="loadDashboard()" style="width:100%;">
+            </div>
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:12px;">ผู้ดูแล (Sales):</label>
+                <select id="filterSales" onchange="loadDashboard()" style="width:100%;"></select>
+            </div>
+        </div>
+
+        <div id="loading" style="color: #2980b9; font-weight: bold; text-align: center; margin-bottom: 20px;">กำลังวิเคราะห์ข้อมูล...</div>
+
+        <!-- แถวที่ 1: สรุปยอดขาย (อิงตามช่วงเดือนที่เลือก) -->
+        <div class="summary-row">
+            <div class="sum-card c-sales">
+                <h4>ยอดขายจริง ช่วงนี้ (฿)</h4>
+                <div class="num" id="sumTotalSales">0</div>
+            </div>
+            <div class="sum-card c-ret">
+                <h4>ยอดจากร้านค้า (฿)</h4>
+                <div class="num" id="sumRetSales">0</div>
+            </div>
+            <div class="sum-card c-proj">
+                <h4>ยอดจากโครงการ (฿)</h4>
+                <div class="num" id="sumProjSales">0</div>
+            </div>
+        </div>
+
+        <!-- แถวที่ 2: สรุปสถานะโครงการทั้งหมด (แยกรายละเอียด) -->
+        <div class="summary-row">
+            <div class="sum-card c-ongoing">
+                <h4>กำลังติดตาม (ONGOING)</h4>
+                <div class="num" id="sumOngoing">0</div>
+                <div class="sub-details bg-ongoing">
+                    <div>• 1. Visit: <strong id="onV">0</strong> งาน</div>
+                    <div>• 2. วางสเปค: <strong id="onS">0</strong> งาน</div>
+                    <div>• 3. Quotation: <strong id="onQ">0</strong> งาน</div>
+                    <div>• ยังไม่ระบุ/อื่นๆ: <strong id="onO">0</strong> งาน</div>
+                </div>
+            </div>
+            <div class="sum-card c-win">
+                <h4>ชนะงาน (WIN)</h4>
+                <div class="num" id="sumWin">0</div>
+                <div class="sub-details bg-win">
+                    <div>• Delivery: <strong id="winD">0</strong> งาน</div>
+                    <div>• Finish: <strong id="winF">0</strong> งาน</div>
+                    <div>• อื่นๆ: <strong id="winO">0</strong> งาน</div>
+                </div>
+            </div>
+            <div class="sum-card c-lose">
+                <h4>พลาดงาน (LOSE)</h4>
+                <div class="num" id="sumLose">0</div>
+            </div>
+        </div>
+
+        <div class="grid-container">
+            <!-- กราฟที่ 1: Forecast vs Actual -->
+            <div class="chart-box">
+                <h3 style="margin-top: 0; text-align: center; font-size: 16px;">📈 เปรียบเทียบ Forecast vs Actual (ปี <span id="lblYear">...</span>)</h3>
+                <canvas id="barChart" height="100"></canvas>
+            </div>
+
+            <!-- กราฟที่ 2: Project Status (Doughnut) -->
+            <div class="chart-box" style="flex: 1; min-width: 250px;">
+                <h3 style="margin-top: 0; text-align: center; font-size: 16px;">🎯 สัดส่วนสถานะโปรเจกต์</h3>
+                <canvas id="pieChart"></canvas>
+            </div>
+
+            <!-- กล่องแสดงรายการโปรเจกต์ใหม่ของเดือน -->
+            <div class="list-box">
+                <h3>🆕 โปรเจกต์ใหม่ (<span id="lblRange">...</span>) <span style="float:right; color:#2980b9;" id="sumNew">0</span></h3>
+                <div id="newProjContainer">
+                    <!-- รายการจะถูกแทรกที่นี่ -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWWgorgptVDnp7DupUI4hMfmw99DDHcCtXNtbQsUmWQBcVy5eSUEmi0jsC2aiIQ7A-tw/exec"; 
+        
+        const myName = localStorage.getItem("salesName");
+        const myRole = localStorage.getItem("salesRole");
+        
+        const loginTime = localStorage.getItem("loginTimestamp");
+
+        // 🚀 ตั้งค่าเวลาหมดอายุ (เช่น 12 ชั่วโมง)
+        const HOURS_VALID = 12; 
+        const isExpired = !loginTime || (Date.now() - parseInt(loginTime)) > (HOURS_VALID * 60 * 60 * 1000);
+
+        // ถ้าไม่มีชื่อ หรือ เวลาล่วงเลยเกิน 12 ชั่วโมง ให้เตะกลับไปหน้า Login
+        if (!myName || isExpired) {
+            alert("เซสชันหมดอายุ หรือคุณยังไม่ได้เข้าสู่ระบบ กรุณาล็อกอินใหม่ครับ");
+            localStorage.clear();
+            window.location.href = "login.html";
+        }
+
+        if(myRole !== "Manager") document.getElementById("menuAccount").style.display = "none";
+        document.getElementById("userNameDisplay").innerText = myName;
+        document.getElementById("userRoleDisplay").innerText = myRole;
+
+        let barChartInstance = null;
+        let pieChartInstance = null;
+
+        function toggleMenu() { document.getElementById("sidebar").classList.toggle("show"); }
+
+        function initialize() {
+            // เซ็ตค่าเริ่มต้นเป็นเดือนปัจจุบัน ทั้งเริ่มและจบ
+            const d = new Date();
+            const mStr = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2);
+            document.getElementById("filterStartMonth").value = mStr;
+            document.getElementById("filterEndMonth").value = mStr;
+
+            const salesSelect = document.getElementById("filterSales");
+            if (myRole === "Manager") {
+                salesSelect.disabled = false;
+                fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "get_users" }) })
+                .then(res => res.json())
+                .then(result => {
+                    salesSelect.innerHTML = `<option value="All">-- รวมเซลส์ทุกคน --</option>`;
+                    result.data.forEach(u => {
+                        let opt = document.createElement("option"); opt.value = u.name; opt.innerText = u.name;
+                        if(u.name === myName) opt.selected = true; 
+                        salesSelect.appendChild(opt);
+                    });
+                    loadDashboard();
+                });
+            } else {
+                salesSelect.innerHTML = `<option value="${myName}">${myName}</option>`;
+                salesSelect.disabled = true;
+                loadDashboard();
+            }
+        }
+
+        function loadDashboard() {
+            const startM = document.getElementById("filterStartMonth").value;
+            const endM = document.getElementById("filterEndMonth").value;
+
+            // ป้องกันการเลือกเดือนเริ่ม มากกว่า เดือนจบ
+            if (startM && endM && startM > endM) {
+                alert("เดือนเริ่มต้น ต้องไม่มากกว่าเดือนที่สิ้นสุดครับ");
+                return;
+            }
+
+            document.getElementById("loading").style.display = "block";
+            
+            const payload = {
+                action: "get_dashboard_data",
+                startMonth: startM,
+                endMonth: endM,
+                sales: document.getElementById("filterSales").value,
+                role: myRole,
+                myName: myName
+            };
+
+            fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) })
+            .then(res => res.json())
+            .then(result => {
+                if (result.status === "success") {
+                    updateSummaryCards(result.summary);
+                    updateNewProjectList(result.newProjects, startM, endM);
+                    
+                    document.getElementById("lblYear").innerText = startM.split("-")[0];
+                    drawBarChart(result.chartData);
+                    drawPieChart(result.summary);
+                }
+            })
+            .finally(() => { document.getElementById("loading").style.display = "none"; });
+        }
+
+        function updateSummaryCards(summary) {
+            // อัปเดตแถว 1: ยอดขาย
+            document.getElementById("sumTotalSales").innerText = summary.totalSales.toLocaleString();
+            document.getElementById("sumRetSales").innerText = summary.retailerSales.toLocaleString();
+            document.getElementById("sumProjSales").innerText = summary.projectSales.toLocaleString();
+
+            // อัปเดตแถว 2: Ongoing
+            document.getElementById("sumOngoing").innerText = summary.ongoing;
+            document.getElementById("onV").innerText = summary.ongoingDetails.visit;
+            document.getElementById("onS").innerText = summary.ongoingDetails.spec;
+            document.getElementById("onQ").innerText = summary.ongoingDetails.quote;
+            document.getElementById("onO").innerText = summary.ongoingDetails.other;
+
+            // อัปเดตแถว 2: Win
+            document.getElementById("sumWin").innerText = summary.win;
+            document.getElementById("winD").innerText = summary.winDetails.delivery;
+            document.getElementById("winF").innerText = summary.winDetails.finish;
+            document.getElementById("winO").innerText = summary.winDetails.other;
+
+            // อัปเดตแถว 2: Lose
+            document.getElementById("sumLose").innerText = summary.lose;
+            
+            // จำนวนโปรเจกต์ใหม่
+            document.getElementById("sumNew").innerText = summary.newCount + " งาน";
+        }
+
+        function updateNewProjectList(projects, start, end) {
+            document.getElementById("lblRange").innerText = (start === end) ? start : `${start} ถึง ${end}`;
+            const container = document.getElementById("newProjContainer");
+            container.innerHTML = "";
+            
+            if(projects.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#999; margin-top:30px;">ไม่มีโปรเจกต์ใหม่ในช่วงเวลานี้</p>`;
+                return;
+            }
+
+            projects.forEach(p => {
+                let badge = "";
+                if(p.status === "Win") badge = "🟢 Win";
+                else if(p.status === "Lose") badge = "🔴 Lose";
+                else badge = "🔵 " + p.status;
+
+                container.innerHTML += `
+                    <div class="new-proj-item">
+                        <strong>${p.id} : ${p.name}</strong>
+                        <span>สร้างเมื่อ: ${p.date}</span><br>
+                        <span style="font-size: 12px; font-weight:bold;">สถานะล่าสุด: ${badge}</span>
+                    </div>
+                `;
+            });
+        }
+
+        function drawBarChart(chartData) {
+            const ctx = document.getElementById('barChart').getContext('2d');
+            if(barChartInstance) barChartInstance.destroy(); 
+
+            barChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."],
+                    datasets: [
+                        {
+                            label: 'เป้าหมาย (Forecast)',
+                            data: chartData.forecast,
+                            backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'ยอดขายจริง (Actual)',
+                            data: chartData.actual,
+                            backgroundColor: 'rgba(39, 174, 96, 0.7)',
+                            borderColor: 'rgba(39, 174, 96, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function drawPieChart(summary) {
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            if(pieChartInstance) pieChartInstance.destroy();
+
+            pieChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Ongoing', 'Win', 'Lose'],
+                    datasets: [{
+                        data: [summary.ongoing, summary.win, summary.lose],
+                        backgroundColor: ['#3498db', '#f39c12', '#e74c3c'],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        document.getElementById("logoutBtn").addEventListener("click", function(e) {
+            e.preventDefault(); if (confirm("ออกจากระบบ?")) { localStorage.clear(); window.location.href = "login.html"; }
+        });
+
+        initialize();
+    </script>
+</body>
+</html>

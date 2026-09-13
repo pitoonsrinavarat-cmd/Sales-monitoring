@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Management - Sales Monitoring</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; display: flex; height: 100vh; }
+        
+        /* Sidebar (เหมือนหน้า Dashboard) */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar h2 { text-align: center; padding: 20px 0; margin: 0; background-color: #1a252f; font-size: 20px; }
+        .sidebar a { padding: 15px 20px; text-decoration: none; color: #ecf0f1; border-bottom: 1px solid #34495e; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background-color: #3498db; }
+        .sidebar .logout { margin-top: auto; background-color: #c0392b; text-align: center; font-weight: bold; border-top: none; }
+        .sidebar .logout:hover { background-color: #e74c3c; }
+
+        /* Main Content */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        /* Table */
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        tr:hover { background-color: #f1f2f6; }
+        .btn-edit { background: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        .btn-edit:hover { background: #d68910; }
+
+        /* Modal (ป๊อปอัปสำหรับแก้ไขข้อมูล) */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .modal h3 { margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .form-group input[readonly], .form-group select[disabled] { background-color: #e9ecef; cursor: not-allowed; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn-save { background: #2ecc71; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .btn-cancel { background: #95a5a6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        
+        #loading { color: #2980b9; font-weight: bold; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>📊 Sales Monitoring</h2>
+        <a href="dashboard.html">หน้าหลัก (Dashboard)</a>
+        <a href="retailer.html">🏪 ฐานข้อมูลร้านค้า</a>
+        <a href="project.html">🏗️ Project Pipeline</a>
+        <a href="forecast.html">📈 Forecast Sales</a>
+        <a href="actual.html">💰 Actual Sales</a>
+        <a href="account.html" class="active">⚙️ จัดการบัญชีผู้ใช้</a>
+        <a href="#" class="logout" id="logoutBtn">🚪 ออกจากระบบ</a>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1>จัดการบัญชีผู้ใช้ (Account Management)</h1>
+        </div>
+
+        <div id="loading">กำลังโหลดข้อมูล...</div>
+        
+        <table id="userTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>ลำดับ (Row)</th>
+                    <th>ชื่อ</th>
+                    <th>ตำแหน่ง</th>
+                    <th>Username</th>
+                    <th>รหัสผ่าน</th>
+                    <th>สถานะ</th>
+                    <th>จัดการ</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody">
+                <!-- ข้อมูลจะถูกเติมด้วย Javascript -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal สำหรับแก้ไขข้อมูล -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h3>แก้ไขข้อมูลบัญชี</h3>
+            <input type="hidden" id="editRow">
+            <div class="form-group">
+                <label>ชื่อ (Name)</label>
+                <input type="text" id="editName">
+            </div>
+            <div class="form-group">
+                <label>ตำแหน่ง (Role)</label>
+                <select id="editRole">
+                    <option value="Manager">Manager</option>
+                    <option value="A-Team">A-Team</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="editUsername">
+            </div>
+            <div class="form-group">
+                <label>รหัสผ่าน (Password)</label>
+                <input type="text" id="editPassword">
+            </div>
+            <div class="form-group">
+                <label>สถานะ (Status)</label>
+                <select id="editStatus">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-save" id="saveBtn" onclick="saveData()">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWWgorgptVDnp7DupUI4hMfmw99DDHcCtXNtbQsUmWQBcVy5eSUEmi0jsC2aiIQ7A-tw/exec"; 
+        
+        // 🚀 เพิ่มการดึง myName และการตรวจสอบ Session Expired
+        const myName = localStorage.getItem("salesName");
+        const myRole = localStorage.getItem("salesRole");
+        const myRow = parseInt(localStorage.getItem("salesRow")); 
+        const loginTime = localStorage.getItem("loginTimestamp");
+
+        const HOURS_VALID = 12; 
+        const isExpired = !loginTime || (Date.now() - parseInt(loginTime)) > (HOURS_VALID * 60 * 60 * 1000);
+
+        // ถ้าไม่มีชื่อ ไม่มีตำแหน่ง หรือ เวลาล่วงเลยเกิน 12 ชั่วโมง ให้เตะกลับไปหน้า Login
+        if (!myName || !myRole || isExpired) {
+            alert("เซสชันหมดอายุ หรือคุณยังไม่ได้เข้าสู่ระบบ กรุณาล็อกอินใหม่ครับ");
+            localStorage.clear();
+            window.location.href = "login.html";
+        }
+
+        function toggleMenu() { document.getElementById("sidebar").classList.toggle("show"); }
+
+        function loadUsers() {
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("userTable").style.display = "none";
+            fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "get_users" }) })
+            .then(res => res.json()).then(result => { if (result.status === "success") renderTable(result.data); });
+        }
+
+        function renderTable(users) {
+            const tbody = document.getElementById("userTableBody"); tbody.innerHTML = "";
+            users.forEach(user => {
+                if (myRole !== "Manager" && user.row !== myRow) return;
+                const tr = document.createElement("tr");
+                const displayPassword = (myRole === "Manager") ? user.password : "****";
+                tr.innerHTML = `
+                    <td>${user.row}</td><td>${user.name}</td><td>${user.role}</td>
+                    <td>${user.username}</td><td>${displayPassword}</td>
+                    <td><span style="color: ${user.status === 'Active' ? 'green' : 'red'}; font-weight:bold;">${user.status}</span></td>
+                    <td><button class="btn-edit" onclick='openModal(${JSON.stringify(user)})'>✏️ แก้ไข</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById("loading").style.display = "none"; document.getElementById("userTable").style.display = "table";
+        }
+
+        function openModal(user) {
+            document.getElementById("editRow").value = user.row; document.getElementById("editName").value = user.name;
+            document.getElementById("editRole").value = user.role; document.getElementById("editUsername").value = user.username;
+            document.getElementById("editPassword").value = user.password; document.getElementById("editStatus").value = user.status;
+            if (myRole !== "Manager") {
+                document.getElementById("editName").readOnly = true; document.getElementById("editRole").disabled = true; document.getElementById("editStatus").disabled = true;
+            } else {
+                document.getElementById("editName").readOnly = false; document.getElementById("editRole").disabled = false; document.getElementById("editStatus").disabled = false;
+            }
+            document.getElementById("editModal").style.display = "flex";
+        }
+
+        function closeModal() { document.getElementById("editModal").style.display = "none"; }
+
+        function saveData() {
+            const btn = document.getElementById("saveBtn"); btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
+            const updateData = { action: "update_user", row: parseInt(document.getElementById("editRow").value), username: document.getElementById("editUsername").value, password: document.getElementById("editPassword").value };
+            if (myRole === "Manager") { updateData.name = document.getElementById("editName").value; updateData.role = document.getElementById("editRole").value; updateData.status = document.getElementById("editStatus").value; }
+            fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(updateData) })
+            .then(res => res.json()).then(result => { alert(result.message); closeModal(); loadUsers(); })
+            .finally(() => { btn.innerText = "บันทึก"; btn.disabled = false; });
+        }
+
+        document.getElementById("logoutBtn").addEventListener("click", function(e) { 
+            e.preventDefault(); 
+            if (confirm("คุณต้องการออกจากระบบใช่หรือไม่?")) { 
+                localStorage.clear(); 
+                window.location.href = "login.html"; 
+            } 
+        });
+        
+        loadUsers();
+    </script>
+</body>
+</html>
