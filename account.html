@@ -134,7 +134,7 @@
         if (!myName || !myRole || isExpired) {
             alert("เซสชันหมดอายุ หรือคุณยังไม่ได้เข้าสู่ระบบ กรุณาล็อกอินใหม่ครับ");
             localStorage.clear();
-            window.location.href = "index.html";
+            window.location.href = "login.html";
         }
 
         function toggleMenu() { document.getElementById("sidebar").classList.toggle("show"); }
@@ -190,7 +190,7 @@
             e.preventDefault(); 
             if (confirm("คุณต้องการออกจากระบบใช่หรือไม่?")) { 
                 localStorage.clear(); 
-                window.location.href = "index.html"; 
+                window.location.href = "login.html"; 
             } 
         });
         
