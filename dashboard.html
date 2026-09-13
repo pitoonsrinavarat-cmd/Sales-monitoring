@@ -185,7 +185,7 @@
         if (!myName || isExpired) {
             alert("เซสชันหมดอายุ หรือคุณยังไม่ได้เข้าสู่ระบบ กรุณาล็อกอินใหม่ครับ");
             localStorage.clear();
-            window.location.href = "login.html";
+            window.location.href = "index.html";
         }
 
         if(myRole !== "Manager") document.getElementById("menuAccount").style.display = "none";
@@ -367,7 +367,7 @@
         }
 
         document.getElementById("logoutBtn").addEventListener("click", function(e) {
-            e.preventDefault(); if (confirm("ออกจากระบบ?")) { localStorage.clear(); window.location.href = "login.html"; }
+            e.preventDefault(); if (confirm("ออกจากระบบ?")) { localStorage.clear(); window.location.href = "index.html"; }
         });
 
         initialize();
