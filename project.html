@@ -63,6 +63,10 @@
         .prod-title { font-weight: bold; color: #2c3e50; display: block; margin-bottom: 2px;}
         .prod-detail { color: #555; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;}
 
+        .global-loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; }
+        .spinner { border: 6px solid #f3f3f3; border-top: 6px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 15px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         @media (max-width: 768px) {
             .sidebar { position: fixed; left: -250px; height: 100%; }
             .sidebar.show { left: 0; }
@@ -75,6 +79,11 @@
     </style>
 </head>
 <body>
+
+    <div class="global-loading-overlay" id="globalLoading">
+        <div class="spinner"></div>
+        <h3 id="loadingText" style="color:#2c3e50; margin:0;">กำลังบันทึกข้อมูล กรุณารอสักครู่...</h3>
+    </div>
 
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMenu()"></div>
 
@@ -128,7 +137,6 @@
                 <thead>
                     <tr>
                         <th>Project ID</th>
-                        <!-- 🚀 เพิ่มคอลัมน์วันที่สร้างกลับมา -->
                         <th>วันที่สร้าง</th>
                         <th>ชื่อโครงการ</th>
                         <th>สถานะ</th>
@@ -231,6 +239,15 @@
         let dataTable; 
         let prodIndex = 0;
 
+        document.addEventListener("keydown", function(event) {
+            if (event.key === "Enter") {
+                if (document.getElementById("logModal").style.display === "flex" || 
+                    document.getElementById("createModal").style.display === "flex") {
+                    event.preventDefault(); 
+                }
+            }
+        });
+
         function toggleMenu() { 
             document.getElementById("sidebar").classList.toggle("show"); 
             const overlay = document.getElementById("sidebarOverlay");
@@ -282,8 +299,9 @@
 
         function loadProjects() {
             document.getElementById("startup-msg").style.display = "none";
-            document.getElementById("loading").style.display = "block";
             document.getElementById("tableWrapper").style.display = "none";
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("loading").innerText = "กำลังโหลดข้อมูลโปรเจกต์...";
 
             let prevProjName = $('#sProjName').val() || "";
             let prevStatus = $('#sStatus').val() || "";
@@ -315,7 +333,7 @@
 
                 if (item.products && item.products.length > 0) {
                     item.products.forEach(p => {
-                        if (p.est_value > 0 || p.act_value > 0) {
+                        if (p.name && p.name !== "") {
                             let cat = p.category || "อื่นๆ"; 
                             if(cat === "Other") cat = "อื่นๆ";
                             if (!p.category) {
@@ -325,18 +343,22 @@
                             let estD = formatToDisplayDate(p.est_date);
                             let actD = formatToDisplayDate(p.act_date);
                             
-                            if (p.est_value > 0) {
+                            let valTextEst = p.est_value > 0 ? `ยอด: <b style="color:#f39c12;">${p.est_value.toLocaleString()} ฿</b>` : `<span style="color:#95a5a6; font-size:11px;">(เสนอสเปค)</span>`;
+                            let valTextAct = p.act_value > 0 ? `ยอด: <b style="color:#27ae60;">${p.act_value.toLocaleString()} ฿</b>` : `-`;
+                            
+                            if (p.est_value > 0 || p.status === "On process") {
                                 expectHTML += `
                                 <div class="prod-item-box">
-                                    <span class="prod-title">[${cat}] ${p.name}</span>
-                                    <div class="prod-detail"><span>ยอด: <b style="color:#f39c12;">${p.est_value.toLocaleString()} ฿</b></span><span>📅 ${estD || "-"}</span></div>
+                                    <span class="prod-title" style="white-space:normal;">[${cat}] ${p.name}</span>
+                                    <div class="prod-detail"><span>${valTextEst}</span><span>📅 ${estD || "-"}</span></div>
                                 </div>`;
                             }
-                            if (p.act_value > 0) {
+                            
+                            if (p.act_value > 0 || p.status === "Win") {
                                 actualHTML += `
                                 <div class="prod-item-box act-box">
-                                    <span class="prod-title">[${cat}] ${p.name}</span>
-                                    <div class="prod-detail"><span>ยอด: <b style="color:#27ae60;">${p.act_value.toLocaleString()} ฿</b></span><span>📅 ${actD || "-"}</span></div>
+                                    <span class="prod-title" style="white-space:normal;">[${cat}] ${p.name}</span>
+                                    <div class="prod-detail"><span>${valTextAct}</span><span>📅 ${actD || "-"}</span></div>
                                 </div>`;
                             }
                         }
@@ -346,7 +368,6 @@
                 if(!expectHTML) expectHTML = "-";
                 if(!actualHTML) actualHTML = "-";
 
-                // 🚀 เพิ่มคอลัมน์ วันที่สร้าง (formatToDisplayDate)
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
                     <td><strong>${item.proj_id}</strong></td>
@@ -373,16 +394,13 @@
             });
 
             if(searchName) dataTable.search(searchName).draw();
-            // 🚀 แก้ไข index ตัวกรอง DataTables ให้ตรงกับคอลัมน์ใหม่ (เลื่อนไป 1 ตำแหน่ง)
             if(searchStatus) dataTable.column(3).search(searchStatus).draw();
             if(searchSubStatus) dataTable.column(4).search(searchSubStatus).draw();
         }
 
         function setupDataTablesFilters() { 
             $('#sProjName').on('keyup', function() { if(dataTable) dataTable.search(this.value).draw(); }); 
-            // 🚀 อัปเดต Column Index สำหรับสถานะ (ย้ายจาก 2 ไป 3)
             $('#sStatus').on('change', function() { if(dataTable) dataTable.column(3).search(this.value).draw(); }); 
-            // 🚀 อัปเดต Column Index สำหรับขั้นการทำงาน (ย้ายจาก 3 ไป 4)
             $('#sSubStatus').on('change', function() { if(dataTable) dataTable.column(4).search(this.value).draw(); }); 
         }
 
@@ -399,7 +417,12 @@
             updateSubStatusOptions(); 
             document.getElementById("lSubStatus").value = proj ? proj.onprocess : ""; 
             document.getElementById("lSales").value = proj ? proj.sales : myName; 
-            document.getElementById("lDetails").value = ""; 
+            
+            let lastDetails = "";
+            if (proj && proj.products && proj.products.length > 0) {
+                lastDetails = proj.products[0].details || ""; 
+            }
+            document.getElementById("lDetails").value = lastDetails; 
             
             renderProductsForStatus();
         }
@@ -424,14 +447,14 @@
             const prodContainer = document.getElementById("productList");
             prodContainer.innerHTML = ""; prodIndex = 0;
 
-            if ((status === "On process" && (sub.includes("วางสเปค") || sub.includes("Quotation"))) || status === "Win") { 
+            if ((status === "On process" && (sub.includes("วางสเปค") || sub.includes("Quotation"))) || (status === "Win" && sub === "Delivery")) { 
                 prodSection.style.display = "block"; 
                 
                 let foundProducts = false;
                 if (proj && proj.products) {
                     let filteredProds = proj.products.filter(p => p.status === status && p.sub_status === sub);
                     
-                    if (filteredProds.length === 0 && status === "Win") {
+                    if (filteredProds.length === 0 && status === "Win" && sub === "Delivery") {
                         filteredProds = proj.products.filter(p => p.sub_status.includes("Quotation"));
                     }
                     
@@ -442,7 +465,9 @@
                 }
                 
                 if (!foundProducts) { addProductRow(); }
-            } else { prodSection.style.display = "none"; } 
+            } else { 
+                prodSection.style.display = "none"; 
+            } 
             
             toggleProductFieldsVisibility();
         }
@@ -464,36 +489,49 @@
             const div = document.createElement("div"); 
             div.className = "product-box"; div.id = "prod_" + prodIndex; 
             
-            const categories = [...new Set(masterProducts.map(p => p.category))]; 
+            const categories = [...new Set(masterProducts.map(p => p.category ? p.category.trim() : ""))].filter(c => c !== ""); 
             let catOptions = `<option value="">- เลือกกลุ่มสินค้า -</option>`; 
-            categories.forEach(c => catOptions += `<option value="${c}">${c}</option>`); 
+            categories.forEach(c => {
+                catOptions += `<option value="${c}">${c}</option>`;
+            });
             catOptions += `<option value="Other">อื่นๆ (ระบุเอง)</option>`;
 
-            let selectedCat = ""; let isOther = false; let otherNameVal = "";
+            let selectedCat = ""; 
+            let isOther = false; 
+            let otherNameVal = "";
+            let pDataNameClean = "";
 
             if (pData && pData.name) {
-                let cleanName = pData.name.toString().trim();
+                pDataNameClean = pData.name.toString().trim();
                 
-                if (pData.category && pData.category !== "Other") {
-                    selectedCat = pData.category;
+                if (pData.category && pData.category.toString().trim() !== "" && pData.category !== "Other") {
+                    selectedCat = pData.category.toString().trim();
                 } else {
-                    const foundItem = masterProducts.find(m => m.name_th.trim() === cleanName);
-                    if (foundItem) selectedCat = foundItem.category;
+                    const foundItem = masterProducts.find(m => m.name_th.trim() === pDataNameClean);
+                    if (foundItem && foundItem.category) {
+                        selectedCat = foundItem.category.trim();
+                    }
                 }
 
-                if (!selectedCat || selectedCat === "Other" || pData.category === "Other") { 
-                    selectedCat = "Other"; isOther = true; otherNameVal = cleanName; 
+                if (!selectedCat || selectedCat === "Other" || (pData.category && pData.category.toString().trim() === "Other")) { 
+                    selectedCat = "Other"; 
+                    isOther = true; 
+                    otherNameVal = pDataNameClean; 
                 }
             }
 
-            if (selectedCat) { catOptions = catOptions.replace(`value="${selectedCat}"`, `value="${selectedCat}" selected`); }
+            if (selectedCat) { 
+                // 🚀 แก้บั๊ก Dropdown ไม่จับคู่กลุ่มสินค้า
+                catOptions = catOptions.replace(`value="${selectedCat}"`, `value="${selectedCat}" selected`); 
+            }
 
             let nameOptions = `<option value="">- รอเลือก -</option>`;
             if (selectedCat && selectedCat !== "Other") {
-                const filtered = masterProducts.filter(p => p.category === selectedCat);
+                const filtered = masterProducts.filter(p => p.category && p.category.trim() === selectedCat);
                 filtered.forEach(p => {
-                    let sel = (pData && p.name_th.trim() === pData.name.trim()) ? "selected" : "";
-                    nameOptions += `<option value="${p.name_th}" ${sel}>${p.name_th}</option>`;
+                    let safeName = p.name_th.replace(/"/g, '&quot;'); 
+                    let sel = (p.name_th.trim() === pDataNameClean) ? "selected" : "";
+                    nameOptions += `<option value="${safeName}" ${sel}>${p.name_th}</option>`;
                 });
                 nameOptions += `<option value="Other">อื่นๆ (ระบุเอง)</option>`;
             } else if (selectedCat === "Other") {
@@ -507,7 +545,7 @@
                     <div class="form-group">
                         <label>ชื่อสินค้า</label>
                         <select class="p-name" onchange="checkOtherName(this, ${prodIndex})" style="display:${isOther ? 'none' : 'block'};">${nameOptions}</select>
-                        <input type="text" class="p-name-other" placeholder="พิมพ์ชื่อสินค้า..." style="display:${isOther ? 'block' : 'none'};" value="${otherNameVal}">
+                        <input type="text" class="p-name-other" placeholder="พิมพ์ชื่อสินค้า..." style="display:${isOther ? 'block' : 'none'};" value="${otherNameVal.replace(/"/g, '&quot;')}">
                     </div>
                 </div>
                 <div class="form-row est-div" style="display:none; background:#fff3cd; padding:10px; border-radius:4px;">
@@ -529,8 +567,11 @@
                 nameSelect.style.display = "none"; otherInput.style.display = "block"; otherInput.value = "";
             } else {
                 nameSelect.style.display = "block"; nameSelect.innerHTML = `<option value="">- เลือกสินค้า -</option>`; 
-                const filtered = masterProducts.filter(p => p.category === cat); 
-                filtered.forEach(p => nameSelect.innerHTML += `<option value="${p.name_th}">${p.name_th}</option>`); 
+                const filtered = masterProducts.filter(p => p.category && p.category.trim() === cat.trim()); 
+                filtered.forEach(p => {
+                    let safeName = p.name_th.replace(/"/g, '&quot;');
+                    nameSelect.innerHTML += `<option value="${safeName}">${p.name_th}</option>`;
+                }); 
                 nameSelect.innerHTML += `<option value="Other">อื่นๆ (ระบุเอง)</option>`; otherInput.style.display = "none";
             }
         }
@@ -542,8 +583,15 @@
         }
         
         function saveLog() { 
-            const btn = document.getElementById("lSaveBtn"); btn.innerText = "กำลังบันทึก..."; btn.disabled = true; 
-            const productsData = []; const prodBoxes = document.getElementsByClassName("product-box"); 
+            document.getElementById("logModal").style.display = "none"; 
+            document.getElementById("loadingText").innerText = "กำลังอัปเดตข้อมูล กรุณารอสักครู่...";
+            document.getElementById("globalLoading").style.display = "flex"; 
+            
+            const productsData = []; 
+            const prodBoxes = document.getElementsByClassName("product-box"); 
+            let currentStatus = document.getElementById("lStatus").value;
+            let currentSub = document.getElementById("lSubStatus").value;
+
             if(document.getElementById("productSection").style.display !== "none") { 
                 for (let i = 0; i < prodBoxes.length; i++) { 
                     let catVal = prodBoxes[i].querySelector(".p-cat").value; 
@@ -551,16 +599,48 @@
                     if (catVal === "Other" || nameVal === "Other") { nameVal = prodBoxes[i].querySelector(".p-name-other").value; }
 
                     if(nameVal && nameVal.trim() !== "") { 
+                        let est_v = 0, est_d = "";
+                        let act_v = 0, act_d = "";
+
+                        if (currentStatus === "On process" && currentSub.includes("Quotation")) {
+                            est_v = prodBoxes[i].querySelector(".p-est-val").value || 0;
+                            est_d = prodBoxes[i].querySelector(".p-est-date").value;
+                        }
+                        if (currentStatus === "Win" && currentSub === "Delivery") {
+                            act_v = prodBoxes[i].querySelector(".p-act-val").value || 0;
+                            act_d = prodBoxes[i].querySelector(".p-act-date").value;
+                        }
+
                         productsData.push({ 
                             category: catVal, name: nameVal.trim(), 
-                            est_value: prodBoxes[i].querySelector(".p-est-val").value || 0, est_date: prodBoxes[i].querySelector(".p-est-date").value, 
-                            act_value: prodBoxes[i].querySelector(".p-act-val").value || 0, act_date: prodBoxes[i].querySelector(".p-act-date").value 
+                            est_value: est_v, est_date: est_d, 
+                            act_value: act_v, act_date: act_d 
                         }); 
                     } 
                 } 
             } 
-            const payload = { action: "add_log", proj_id: document.getElementById("lProjId").value, log_date: document.getElementById("lDate").value, status: document.getElementById("lStatus").value, sub_status: document.getElementById("lSubStatus").value, details: document.getElementById("lDetails").value, products: productsData, sales: document.getElementById("lSales").value }; 
-            fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) }).then(res => res.json()).then(result => { alert(result.message); document.getElementById("logModal").style.display = "none"; loadProjects(); }).finally(() => { btn.innerText = "บันทึกสถานะ"; btn.disabled = false; }); 
+            
+            const payload = { action: "add_log", proj_id: document.getElementById("lProjId").value, log_date: document.getElementById("lDate").value, status: currentStatus, sub_status: currentSub, details: document.getElementById("lDetails").value, products: productsData, sales: document.getElementById("lSales").value }; 
+            
+            fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) })
+            .then(res => {
+                if(!res.ok) throw new Error("การเชื่อมต่อเซิร์ฟเวอร์ล้มเหลว");
+                return res.json();
+            })
+            .then(result => { 
+                document.getElementById("globalLoading").style.display = "none";
+                if (result.status === "success") {
+                    alert(result.message); 
+                    loadProjects(); 
+                } else {
+                    alert(result.message); // แจ้งเตือนถ้าหลังบ้านเจอ Error
+                }
+            })
+            .catch(error => { 
+                document.getElementById("globalLoading").style.display = "none";
+                alert("การเชื่อมต่อมีปัญหา หรือเซสชันหมดอายุ กรุณารีเฟรชหน้าเว็บ"); 
+                console.error(error);
+            }); 
         }
 
         document.getElementById("logoutBtn").addEventListener("click", function(e) { e.preventDefault(); if (confirm("ออกจากระบบ?")) { localStorage.clear(); window.location.href = "index.html"; } });
