@@ -239,6 +239,17 @@
         let dataTable; 
         let prodIndex = 0;
 
+        // 🚀 ฟังก์ชันเกราะป้องกันสัญลักษณ์พิเศษ (ฟันหนู จะไม่ทำให้ระบบพังอีกต่อไป)
+        function escapeHtml(text) {
+            if (!text) return "";
+            return String(text)
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
         document.addEventListener("keydown", function(event) {
             if (event.key === "Enter") {
                 if (document.getElementById("logModal").style.display === "flex" || 
@@ -349,7 +360,7 @@
                             if (p.est_value > 0 || p.status === "On process") {
                                 expectHTML += `
                                 <div class="prod-item-box">
-                                    <span class="prod-title" style="white-space:normal;">[${cat}] ${p.name}</span>
+                                    <span class="prod-title" style="white-space:normal;">[${escapeHtml(cat)}] ${escapeHtml(p.name)}</span>
                                     <div class="prod-detail"><span>${valTextEst}</span><span>📅 ${estD || "-"}</span></div>
                                 </div>`;
                             }
@@ -357,7 +368,7 @@
                             if (p.act_value > 0 || p.status === "Win") {
                                 actualHTML += `
                                 <div class="prod-item-box act-box">
-                                    <span class="prod-title" style="white-space:normal;">[${cat}] ${p.name}</span>
+                                    <span class="prod-title" style="white-space:normal;">[${escapeHtml(cat)}] ${escapeHtml(p.name)}</span>
                                     <div class="prod-detail"><span>${valTextAct}</span><span>📅 ${actD || "-"}</span></div>
                                 </div>`;
                             }
@@ -372,7 +383,7 @@
                 tr.innerHTML = `
                     <td><strong>${item.proj_id}</strong></td>
                     <td>${formatToDisplayDate(item.create_date)}</td>
-                    <td>${item.proj_name}</td>
+                    <td>${escapeHtml(item.proj_name)}</td>
                     <td><span class="badge ${badgeClass}">${item.status || "New"}</span></td>
                     <td>${item.onprocess}</td>
                     <td><div class="prod-list-table">${expectHTML}</div></td>
@@ -484,18 +495,14 @@
             } 
         }
         
+        // 🚀 อัปเกรดระบบตัวเลือกสินค้า โดยใช้เกราะป้องกัน HTML สัญลักษณ์พิเศษทุกจุด
         function addProductRow(pData = null) { 
             const list = document.getElementById("productList"); 
             const div = document.createElement("div"); 
             div.className = "product-box"; div.id = "prod_" + prodIndex; 
             
             const categories = [...new Set(masterProducts.map(p => p.category ? p.category.trim() : ""))].filter(c => c !== ""); 
-            let catOptions = `<option value="">- เลือกกลุ่มสินค้า -</option>`; 
-            categories.forEach(c => {
-                catOptions += `<option value="${c}">${c}</option>`;
-            });
-            catOptions += `<option value="Other">อื่นๆ (ระบุเอง)</option>`;
-
+            
             let selectedCat = ""; 
             let isOther = false; 
             let otherNameVal = "";
@@ -504,35 +511,43 @@
             if (pData && pData.name) {
                 pDataNameClean = pData.name.toString().trim();
                 
-                if (pData.category && pData.category.toString().trim() !== "" && pData.category !== "Other") {
+                const foundMasterItem = masterProducts.find(m => m.name_th.trim() === pDataNameClean);
+                
+                if (foundMasterItem && foundMasterItem.category) {
+                    selectedCat = foundMasterItem.category.trim();
+                } else if (pData.category && pData.category.toString().trim() !== "" && pData.category !== "Other") {
                     selectedCat = pData.category.toString().trim();
                 } else {
-                    const foundItem = masterProducts.find(m => m.name_th.trim() === pDataNameClean);
-                    if (foundItem && foundItem.category) {
-                        selectedCat = foundItem.category.trim();
-                    }
-                }
-
-                if (!selectedCat || selectedCat === "Other" || (pData.category && pData.category.toString().trim() === "Other")) { 
                     selectedCat = "Other"; 
                     isOther = true; 
                     otherNameVal = pDataNameClean; 
                 }
             }
 
-            if (selectedCat) { 
-                // 🚀 แก้บั๊ก Dropdown ไม่จับคู่กลุ่มสินค้า
-                catOptions = catOptions.replace(`value="${selectedCat}"`, `value="${selectedCat}" selected`); 
-            }
+            let catOptions = `<option value="">- เลือกกลุ่มสินค้า -</option>`; 
+            categories.forEach(c => {
+                let sel = (selectedCat === c) ? "selected" : "";
+                catOptions += `<option value="${escapeHtml(c)}" ${sel}>${escapeHtml(c)}</option>`;
+            });
+            catOptions += `<option value="Other" ${(selectedCat === "Other") ? "selected" : ""}>อื่นๆ (ระบุเอง)</option>`;
 
             let nameOptions = `<option value="">- รอเลือก -</option>`;
+            let itemFound = false;
+
             if (selectedCat && selectedCat !== "Other") {
                 const filtered = masterProducts.filter(p => p.category && p.category.trim() === selectedCat);
                 filtered.forEach(p => {
-                    let safeName = p.name_th.replace(/"/g, '&quot;'); 
-                    let sel = (p.name_th.trim() === pDataNameClean) ? "selected" : "";
-                    nameOptions += `<option value="${safeName}" ${sel}>${p.name_th}</option>`;
+                    let isMatch = (p.name_th.trim() === pDataNameClean);
+                    if (isMatch) itemFound = true;
+                    let sel = isMatch ? "selected" : "";
+                    nameOptions += `<option value="${escapeHtml(p.name_th)}" ${sel}>${escapeHtml(p.name_th)}</option>`;
                 });
+                
+                // 🚀 ถ้าหาไม่เจอ จะยัดข้อมูลดิบที่ครอบด้วยเกราะแล้วลงไป เพื่อป้องกันข้อมูลสูญหาย
+                if (pDataNameClean && !itemFound && !isOther) {
+                    nameOptions += `<option value="${escapeHtml(pDataNameClean)}" selected>${escapeHtml(pDataNameClean)}</option>`;
+                }
+                
                 nameOptions += `<option value="Other">อื่นๆ (ระบุเอง)</option>`;
             } else if (selectedCat === "Other") {
                 nameOptions = `<option value="Other" selected>อื่นๆ (ระบุเอง)</option>`;
@@ -541,11 +556,12 @@
             div.innerHTML = `
                 <span class="remove-prod" onclick="this.parentElement.remove()">✖</span>
                 <div class="form-row">
-                    <div class="form-group"><label>กลุ่มสินค้า <span style="color:#7f8c8d; font-size:10px;">(หรือเลือกอื่นๆ)</span></label><select class="p-cat" onchange="updateProductList(this, ${prodIndex})">${catOptions}</select></div>
+                    <div class="form-group"><label>กลุ่มสินค้า <span style="color:#7f8c8d; font-size:10px;">(หรือเลือกอื่นๆ)</span></label>
+                    <select class="p-cat" onchange="updateProductList(this, ${prodIndex})">${catOptions}</select></div>
                     <div class="form-group">
                         <label>ชื่อสินค้า</label>
                         <select class="p-name" onchange="checkOtherName(this, ${prodIndex})" style="display:${isOther ? 'none' : 'block'};">${nameOptions}</select>
-                        <input type="text" class="p-name-other" placeholder="พิมพ์ชื่อสินค้า..." style="display:${isOther ? 'block' : 'none'};" value="${otherNameVal.replace(/"/g, '&quot;')}">
+                        <input type="text" class="p-name-other" placeholder="พิมพ์ชื่อสินค้า..." style="display:${isOther ? 'block' : 'none'};" value="${escapeHtml(otherNameVal)}">
                     </div>
                 </div>
                 <div class="form-row est-div" style="display:none; background:#fff3cd; padding:10px; border-radius:4px;">
@@ -566,13 +582,15 @@
             if (cat === "Other") {
                 nameSelect.style.display = "none"; otherInput.style.display = "block"; otherInput.value = "";
             } else {
-                nameSelect.style.display = "block"; nameSelect.innerHTML = `<option value="">- เลือกสินค้า -</option>`; 
+                nameSelect.style.display = "block"; 
+                let nameOptions = `<option value="">- เลือกสินค้า -</option>`; 
                 const filtered = masterProducts.filter(p => p.category && p.category.trim() === cat.trim()); 
                 filtered.forEach(p => {
-                    let safeName = p.name_th.replace(/"/g, '&quot;');
-                    nameSelect.innerHTML += `<option value="${safeName}">${p.name_th}</option>`;
+                    nameOptions += `<option value="${escapeHtml(p.name_th)}">${escapeHtml(p.name_th)}</option>`;
                 }); 
-                nameSelect.innerHTML += `<option value="Other">อื่นๆ (ระบุเอง)</option>`; otherInput.style.display = "none";
+                nameOptions += `<option value="Other">อื่นๆ (ระบุเอง)</option>`; 
+                nameSelect.innerHTML = nameOptions;
+                otherInput.style.display = "none";
             }
         }
 
@@ -633,7 +651,7 @@
                     alert(result.message); 
                     loadProjects(); 
                 } else {
-                    alert(result.message); // แจ้งเตือนถ้าหลังบ้านเจอ Error
+                    alert(result.message); 
                 }
             })
             .catch(error => { 
